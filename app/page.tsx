@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
 type ClassItem = { id: string; name: string; createdAt: number };
 type Student = { id: string; classId: string; name: string; email?: string; createdAt: number };
@@ -9,7 +9,7 @@ type AttendanceRecord = {
   id: string;
   classId: string;
   date: string; // YYYY-MM-DD
-  entries: Record<string, AttendanceStatus>;
+  entries: Record<string, AttendanceStatus>; // studentId -> status
   createdAt: number;
 };
 
@@ -18,30 +18,37 @@ function uid() {
 }
 
 function todayISO() {
-  return new Date().toISOString().slice(0, 10);
+  // YYYY-MM-DD in local time
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
 }
 
-export default function HomePage() {
-  // In-memory fallback, works w/o firebase (for now at least)
+export default function Page() {
+  // In-memory state
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
 
   const [activeClassId, setActiveClassId] = useState<string>("");
   const [newClassName, setNewClassName] = useState("");
+
   const [newStudentName, setNewStudentName] = useState("");
   const [newStudentEmail, setNewStudentEmail] = useState("");
 
   const [attendanceDate, setAttendanceDate] = useState<string>(todayISO());
   const [draftEntries, setDraftEntries] = useState<Record<string, AttendanceStatus>>({});
 
-  // making sure theres at least one class, initalizing if needed (empty)
+  // Ensure at least one class exists on first load
   useEffect(() => {
     if (classes.length === 0) {
-      const c = { id: uid(), name: "Section 001", createdAt: Date.now() };
+      const c: ClassItem = { id: uid(), name: "Section 001", createdAt: Date.now() };
       setClasses([c]);
       setActiveClassId(c.id);
     }
+    // Intentionally run once (initialize default class)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -55,33 +62,36 @@ export default function HomePage() {
     [students, activeClassId]
   );
 
-  const classRecords = useMemo(
-    () =>
-      records
-        .filter((r) => r.classId === activeClassId)
-        .sort((a, b) => b.date.localeCompare(a.date)),
-    [records, activeClassId]
-  );
+  const classRecords = useMemo(() => {
+    return records
+      .filter((r) => r.classId === activeClassId)
+      .sort((a, b) => b.date.localeCompare(a.date)); // newest first
+  }, [records, activeClassId]);
 
-  // When date or roster changes, pre filling (seed draft entries, default absent)
+  // Seed draft entries when class/date/students change.
+  // Default absent unless already set in draft.
   useEffect(() => {
     if (!activeClassId) return;
     const seeded: Record<string, AttendanceStatus> = {};
-    for (const s of classStudents) seeded[s.id] = draftEntries[s.id] ?? "absent";
+    for (const s of classStudents) {
+      seeded[s.id] = draftEntries[s.id] ?? "absent";
+    }
     setDraftEntries(seeded);
+    // We depend on length rather than full array to avoid reseeding on every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [attendanceDate, activeClassId, classStudents.length]);
+  }, [activeClassId, attendanceDate, classStudents.length]);
 
-  function createClass() {
+  function handleCreateClass() {
     const name = newClassName.trim();
     if (!name) return;
+
     const c: ClassItem = { id: uid(), name, createdAt: Date.now() };
     setClasses((prev) => [...prev, c]);
     setActiveClassId(c.id);
     setNewClassName("");
   }
 
-  function addStudent() {
+  function handleAddStudent() {
     if (!activeClassId) return;
     const name = newStudentName.trim();
     if (!name) return;
@@ -93,6 +103,7 @@ export default function HomePage() {
       email: newStudentEmail.trim() || undefined,
       createdAt: Date.now(),
     };
+
     setStudents((prev) => [...prev, s]);
     setNewStudentName("");
     setNewStudentEmail("");
@@ -105,50 +116,56 @@ export default function HomePage() {
     }));
   }
 
-  function saveAttendance() {
+  function handleSaveAttendance() {
     if (!activeClassId) return;
-    const id = uid();
+
     const rec: AttendanceRecord = {
-      id,
+      id: uid(),
       classId: activeClassId,
       date: attendanceDate,
-      entries: draftEntries,
+      entries: { ...draftEntries },
       createdAt: Date.now(),
     };
 
-    // update/insert by (classId, date): if record exists for date, replace it
+    // Upsert by classId+date: replace existing record for that date
     setRecords((prev) => {
       const filtered = prev.filter((r) => !(r.classId === activeClassId && r.date === attendanceDate));
       return [...filtered, rec];
     });
-    alert("Attendance saved.");
+
+    alert("Attendance saved!");
   }
 
-  function attendancePct(studentId: string) {
-    const relevant = classRecords;
-    if (relevant.length === 0) return "—";
+  function attendancePercent(studentId: string) {
+    if (classRecords.length === 0) return "—";
     let present = 0;
-    for (const r of relevant) if (r.entries[studentId] === "present") present++;
-    return `${Math.round((present / relevant.length) * 100)}%`;
+    for (const r of classRecords) {
+      if (r.entries[studentId] === "present") present++;
+    }
+    return `${Math.round((present / classRecords.length) * 100)}%`;
   }
 
   function exportCSV() {
-    // rows: date, studentName, status
+    // date, studentName, studentEmail, status
     const header = ["date", "studentName", "studentEmail", "status"];
     const rows: string[] = [header.join(",")];
 
     const idToStudent = new Map(classStudents.map((s) => [s.id, s]));
-    for (const r of classRecords.slice().reverse()) {
+
+    // export oldest -> newest
+    const ordered = [...classRecords].sort((a, b) => a.date.localeCompare(b.date));
+    for (const r of ordered) {
       for (const [studentId, status] of Object.entries(r.entries)) {
         const s = idToStudent.get(studentId);
         if (!s) continue;
-        const row = [
-          r.date,
-          JSON.stringify(s.name),
-          JSON.stringify(s.email ?? ""),
-          status,
-        ].join(",");
-        rows.push(row);
+        rows.push(
+          [
+            r.date,
+            JSON.stringify(s.name),
+            JSON.stringify(s.email ?? ""),
+            status,
+          ].join(",")
+        );
       }
     }
 
@@ -156,25 +173,25 @@ export default function HomePage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${activeClass?.name ?? "class"}-attendance.csv`;
+    a.download = `${(activeClass?.name ?? "class").replaceAll(" ", "_")}_attendance.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
 
   return (
     <main style={{ maxWidth: 980, margin: "0 auto", padding: 16, fontFamily: "system-ui" }}>
-      <h1 style={{ fontSize: 28, marginBottom: 8 }}>Attendance Tracker</h1>
-      <p style={{ marginTop: 0, color: "#444" }}>
-        Create classes, add students, take attendance by date, and review history.
+      <h1 style={{ margin: 0, fontSize: 28 }}>Attendance Tracker</h1>
+      <p style={{ marginTop: 6, color: "#555" }}>
+        Basic working version (in-memory). Refreshing the page resets data.
       </p>
 
       {/* CLASS SECTION */}
       <section style={{ border: "1px solid #ddd", borderRadius: 12, padding: 16, marginTop: 16 }}>
         <h2 style={{ marginTop: 0 }}>Class / Section</h2>
 
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-          <label>
-            Active class:&nbsp;
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+          <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            Active class:
             <select value={activeClassId} onChange={(e) => setActiveClassId(e.target.value)}>
               {classes.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -189,15 +206,15 @@ export default function HomePage() {
             onChange={(e) => setNewClassName(e.target.value)}
             placeholder="New class name"
           />
-          <button onClick={createClass}>Create</button>
+          <button onClick={handleCreateClass}>Create class</button>
         </div>
       </section>
 
-      {/* STUDENTS */}
+      {/* STUDENTS SECTION */}
       <section style={{ border: "1px solid #ddd", borderRadius: 12, padding: 16, marginTop: 16 }}>
         <h2 style={{ marginTop: 0 }}>Students</h2>
 
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
           <input
             value={newStudentName}
             onChange={(e) => setNewStudentName(e.target.value)}
@@ -208,42 +225,41 @@ export default function HomePage() {
             onChange={(e) => setNewStudentEmail(e.target.value)}
             placeholder="Email/ID (optional)"
           />
-          <button onClick={addStudent} disabled={!activeClassId}>
+          <button onClick={handleAddStudent} disabled={!activeClassId}>
             Add student
           </button>
         </div>
 
-        <ul style={{ paddingLeft: 18 }}>
-          {classStudents.map((s) => (
-            <li key={s.id}>
-              {s.name}
-              {s.email ? ` (${s.email})` : ""} — Attendance: <b>{attendancePct(s.id)}</b>
-            </li>
-          ))}
-        </ul>
-
-        {classStudents.length === 0 && <p style={{ color: "#666" }}>No students yet.</p>}
+        {classStudents.length === 0 ? (
+          <p style={{ color: "#666" }}>No students yet — add at least one.</p>
+        ) : (
+          <ul style={{ paddingLeft: 18, marginBottom: 0 }}>
+            {classStudents.map((s) => (
+              <li key={s.id}>
+                {s.name}
+                {s.email ? ` (${s.email})` : ""} — Attendance: <b>{attendancePercent(s.id)}</b>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
 
       {/* TAKE ATTENDANCE */}
       <section style={{ border: "1px solid #ddd", borderRadius: 12, padding: 16, marginTop: 16 }}>
         <h2 style={{ marginTop: 0 }}>Take Attendance</h2>
 
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-          <label>
-            Date:&nbsp;
-            <input
-              type="date"
-              value={attendanceDate}
-              onChange={(e) => setAttendanceDate(e.target.value)}
-            />
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+          <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            Date:
+            <input type="date" value={attendanceDate} onChange={(e) => setAttendanceDate(e.target.value)} />
           </label>
-          <button onClick={saveAttendance} disabled={classStudents.length === 0}>
+
+          <button onClick={handleSaveAttendance} disabled={classStudents.length === 0}>
             Save attendance
           </button>
         </div>
 
-        <div style={{ marginTop: 12 }}>
+        <div style={{ marginTop: 12, borderTop: "1px solid #eee" }}>
           {classStudents.map((s) => {
             const status = draftEntries[s.id] ?? "absent";
             return (
@@ -252,7 +268,8 @@ export default function HomePage() {
                 style={{
                   display: "flex",
                   justifyContent: "space-between",
-                  padding: "8px 10px",
+                  alignItems: "center",
+                  padding: "10px 6px",
                   borderBottom: "1px solid #eee",
                 }}
               >
@@ -272,14 +289,14 @@ export default function HomePage() {
       <section style={{ border: "1px solid #ddd", borderRadius: 12, padding: 16, marginTop: 16 }}>
         <h2 style={{ marginTop: 0 }}>Attendance History</h2>
 
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
           <button onClick={exportCSV} disabled={classRecords.length === 0}>
             Export CSV
           </button>
         </div>
 
         {classRecords.length === 0 ? (
-          <p style={{ color: "#666" }}>No records yet.</p>
+          <p style={{ color: "#666" }}>No attendance records saved yet.</p>
         ) : (
           <div style={{ display: "grid", gap: 12 }}>
             {classRecords.map((r) => (
