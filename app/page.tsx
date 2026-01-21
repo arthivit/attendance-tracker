@@ -168,7 +168,7 @@ export default function Page() {
         <header className="topbar">
           <div>
             <h1 className="h1">Attendance Tracker</h1>
-            <p className="muted">Pick a class → add students → take attendance → view history.</p>
+            <p className="muted">Created by av1066, CSES'29 </p>
           </div>
           <div className="topbarActions">
             <button className="btn btnPrimary" onClick={openCreateClass}>
@@ -186,23 +186,34 @@ export default function Page() {
             <div className="cardHeader">
               <div>
                 <h2 className="h2">Class & Roster</h2>
-                <p className="muted">Switch classes and manage students.</p>
+                <p className="muted">Switch classes and manage students' attendance with ease.</p>
               </div>
             </div>
-
+            
             <div className="fieldRow">
-              <label className="label">Active class</label>
-              <select
-                className="select"
-                value={activeClassId}
-                onChange={(e) => setActiveClassId(e.target.value)}
-              >
-                {classes.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
+              <label className="muted">Selected Class</label>
+
+              <div className="classSelectRow">
+                <select
+                  className="select"
+                  value={activeClassId}
+                  onChange={(e) => setActiveClassId(e.target.value)}
+                >
+                  {classes.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+
+                <button
+                  className="btn btnSecondary"
+                  onClick={openCreateClass}
+                  type="button"
+                >
+                  + Add Class
+                </button>
+              </div>
             </div>
 
             <div className="divider" />
@@ -377,7 +388,7 @@ export default function Page() {
             className="input"
             value={newClassName}
             onChange={(e) => setNewClassName(e.target.value)}
-            placeholder="e.g., CS101 - Section A"
+            placeholder="e.g., COSC1020 - Section 1"
           />
 
           <div className="formActions">
@@ -395,7 +406,7 @@ export default function Page() {
       <Modal
         open={studentModalOpen}
         title="Add a new student"
-        description="Enter a name (required) and an optional email/ID. Press Enter to add."
+        description="Enter a name (required) and an optional email/NetID. Press Enter to add."
         onClose={() => setStudentModalOpen(false)}
       >
         <form onSubmit={handleAddStudentSubmit} className="form">
@@ -409,13 +420,13 @@ export default function Page() {
           />
 
           <label className="label" style={{ marginTop: 10 }}>
-            Email / ID (optional)
+            Email / NetID (optional)
           </label>
           <input
             className="input"
             value={newStudentEmail}
             onChange={(e) => setNewStudentEmail(e.target.value)}
-            placeholder="e.g., jdoe@school.edu"
+            placeholder="e.g., jd12(@georgetown.edu)"
           />
 
           <div className="formActions">
