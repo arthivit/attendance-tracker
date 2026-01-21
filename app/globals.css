@@ -160,6 +160,18 @@ body {
   border-color: rgba(255, 255, 255, 0.18);
 }
 
+.btn.btnPillOn:hover,
+.btn.btnPillOn:active {
+  background: rgba(80, 200, 140, 0.20);
+  border-color: rgba(80, 200, 140, 0.45);
+}
+
+.btn.btnPillAbsent:hover,
+.btn.btnPillAbsent:active {
+  background: rgba(255, 120, 120, 0.18);
+  border-color: rgba(255, 120, 120, 0.45);
+}
+
 .btn:active {
   transform: translateY(1px);
 }
@@ -197,8 +209,19 @@ body {
   border-color: rgba(80, 200, 140, 0.40);
 }
 
+.btnPillAbsent {
+  background: rgba(255, 120, 120, 0.18);
+  border-color: rgba(255, 120, 120, 0.45);
+}
+
 .btnPillOff {
   background: rgba(255, 255, 255, 0.06);
+}
+
+.btnGroup {
+  display: flex;
+  gap: 8px;         
+  align-items: center;
 }
 
 /* Lists */

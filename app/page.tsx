@@ -121,12 +121,13 @@ export default function Page() {
     setStudentModalOpen(false);
   }
 
-  function toggleStatus(studentId: string) {
-    setDraftEntries((prev) => ({
-      ...prev,
-      [studentId]: prev[studentId] === "present" ? "absent" : "present",
-    }));
-  }
+ function setStatus(studentId: string, status: AttendanceStatus) {
+  setDraftEntries((prev) => ({
+    ...prev,
+    [studentId]: status,
+  }));
+}
+
 
   function saveAttendance() {
     if (!activeClassId) return;
@@ -286,18 +287,33 @@ export default function Page() {
                         <div className="listTitle">{s.name}</div>
                         <div className="muted">{s.email ? s.email : "—"}</div>
                       </div>
+                      <div className="btnGroup" role="group" aria-label={`Mark ${s.name}`}>
+                      <button
+                        className={classNames(
+                          "btn",
+                          "btnSmall",
+                          status === "present" && "btnPillOn"
+                        )}
+                        onClick={() => setStatus(s.id, "present")}
+                        aria-pressed={status === "present"}
+                        type="button"
+                      >
+                        Present
+                      </button>
 
                       <button
                         className={classNames(
                           "btn",
-                          "btnPill",
-                          status === "present" ? "btnPillOn" : "btnPillOff"
+                          "btnSmall",
+                          status === "absent" && "btnPillAbsent"
                         )}
-                        onClick={() => toggleStatus(s.id)}
-                        aria-pressed={status === "present"}
+                        onClick={() => setStatus(s.id, "absent")}
+                        aria-pressed={status === "absent"}
+                        type="button"
                       >
-                        {status === "present" ? "Present" : "Absent"}
+                        Absent
                       </button>
+                    </div>
                     </div>
                   );
                 })}
